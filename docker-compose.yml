@@ -1,0 +1,56 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Primary Node
+  postgres-primary-lab:
+    image: postgres:14
+    container_name: postgres-primary-lab
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-testdb}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_password_123}
+    ports:
+      - "35432:5432"
+    volumes:
+      - postgres_primary_lab_data:/var/lib/postgresql/data
+      - postgres_lab_logs:/var/log/postgresql
+    networks:
+      - pgnet-lab
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-testdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL Standby Node
+  postgres-standby-lab:
+    image: postgres:14
+    container_name: postgres-standby-lab
+    depends_on:
+      postgres-primary-lab:
+        condition: service_healthy
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-testdb}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_password_123}
+    volumes:
+      - postgres_standby_lab_data:/var/lib/postgresql/data
+      - postgres_lab_logs:/var/log/postgresql
+    ports:
+      - "45433:5432"
+    networks:
+      - pgnet-lab
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-testdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  pgnet-lab:
+    driver: bridge
+
+volumes:
+  postgres_primary_lab_data:
+  postgres_lab_logs:
+  postgres_standby_lab_data:
