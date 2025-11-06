@@ -84,6 +84,47 @@ services:
       timeout: 5s
       retries: 5
 
+  # PostgreSQL Exporter for Prometheus metrics
+  pg_exporter-lab:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: pg_exporter-lab
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-secure_password_123}@postgres-primary:5432/${POSTGRES_DB:-testdb}?sslmode=disable
+    ports:
+      - "9187:9187"
+    networks:
+      - pgnet-lab
+    depends_on:
+      postgres-primary-lab:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Custom PostgreSQL Replication Exporter
+  pg-replication-exporter-lab:
+    build:
+      context: .
+      dockerfile: scripts/Dockerfile.replication-exporter
+    container_name: pg-replication-exporter-lab
+    environment:
+      - PRIMARY_HOST=postgres-primary-lab
+      - PRIMARY_PORT=5432
+      - STANDBY_HOST=postgres-standby-lab
+      - STANDBY_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-testdb}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_password_123}
+      - EXPORTER_PORT=9188
+    ports:
+      - "9188:9188"
+    networks:
+      - pgnet-lab
+    depends_on:
+      postgres-primary-lab:
+        condition: service_healthy
+      postgres-standby-lab:
+        condition: service_healthy
+    restart: unless-stopped
+
 networks:
   pgnet-lab:
     driver: bridge

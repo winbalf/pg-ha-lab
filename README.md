@@ -9,6 +9,7 @@
 
 - **Automatic replication setup**: Primary and standby nodes are automatically configured for streaming replication
 - **Monitoring extensions**: Pre-configured with `pg_stat_statements`, `pg_buffercache`, and other useful extensions
+- **Prometheus metrics**: Two exporters included for comprehensive monitoring (standard PostgreSQL metrics and custom replication metrics)
 - **Test data**: Sample data and test functions included for replication validation
 - **Enhanced logging**: Comprehensive logging configuration for both primary and standby nodes
 - **Health checks**: Built-in health checks ensure nodes are ready before connections
@@ -17,6 +18,8 @@
 
 - **Primary**: `postgres-primary-lab` (port host `35432` → container `5432`)
 - **Standby**: `postgres-standby-lab` (port host `45433` → container `5432`)
+- **PostgreSQL Exporter**: `pg_exporter-lab` (Prometheus metrics on port `9187`)
+- **Replication Exporter**: `pg-replication-exporter-lab` (Custom replication metrics on port `9188`)
 - **Network**: `pgnet-lab` (bridge network for inter-container communication)
 - **Volumes**: Separate data directories for primary/standby and a shared logs volume
 
@@ -24,7 +27,7 @@
 
 - Docker and Docker Compose installed
 - ~1 GB free disk space for images and data volumes
-- Ports `35432` and `45433` available on your host
+- Ports `35432`, `45433`, `9187`, and `9188` available on your host
 
 ## Quick Start
 
@@ -77,6 +80,8 @@ POSTGRES_REPLICATION_PASSWORD=repl_secret
 
 - **Primary**: `localhost:35432`
 - **Standby**: `localhost:45433`
+- **PostgreSQL Exporter**: `localhost:9187` (Prometheus metrics endpoint)
+- **Replication Exporter**: `localhost:9188` (Custom replication metrics endpoint)
 
 ### Volumes
 
@@ -187,6 +192,12 @@ docker logs postgres-primary-lab
 # Standby logs
 docker logs postgres-standby-lab
 
+# PostgreSQL Exporter logs
+docker logs pg_exporter-lab
+
+# Replication Exporter logs
+docker logs pg-replication-exporter-lab
+
 # Follow logs in real-time
 docker logs -f postgres-primary-lab
 ```
@@ -204,20 +215,59 @@ The logging configuration includes:
 - Lock waits
 - Temporary file usage
 
+### Prometheus Metrics
+
+The lab includes two Prometheus exporters for comprehensive monitoring:
+
+#### PostgreSQL Exporter (`pg_exporter-lab`)
+
+Standard PostgreSQL metrics exporter (port `9187`):
+```bash
+# View metrics
+curl http://localhost:9187/metrics
+```
+
+Provides standard PostgreSQL metrics including:
+- Database connections and activity
+- Query performance statistics
+- Table and index statistics
+- Connection pool metrics
+
+#### Replication Exporter (`pg-replication-exporter-lab`)
+
+Custom replication-specific metrics exporter (port `9188`):
+```bash
+# View replication metrics
+curl http://localhost:9188/metrics
+```
+
+Provides specialized replication metrics including:
+- Replication lag (bytes, seconds, megabytes)
+- Replication connection status
+- WAL sender/receiver counts
+- Replication slot status
+- Replication health score
+- Data consistency checks
+
+Both exporters are automatically configured to connect to the primary database and provide metrics in Prometheus format.
+
 ### Health Checks
 
-Both containers use `pg_isready` health checks:
+PostgreSQL containers use `pg_isready` health checks:
 - Interval: 10 seconds
 - Timeout: 5 seconds
 - Retries: 5
+
+The replication exporter includes its own health check that verifies the metrics endpoint is responding.
 
 ## Troubleshooting
 
 ### Containers won't start
 
-- **Check port availability**: Ensure ports `35432` and `45433` are not in use
+- **Check port availability**: Ensure ports `35432`, `45433`, `9187`, and `9188` are not in use
 - **Check Docker resources**: Ensure Docker has sufficient resources allocated
 - **View logs**: Check container logs for initialization errors
+- **Check exporter builds**: The replication exporter needs to be built - ensure Docker can build images
 
 ### Replication not working
 
@@ -225,6 +275,7 @@ Both containers use `pg_isready` health checks:
 - **Check primary logs**: Look for replication setup errors
 - **Check standby logs**: Verify base backup completed successfully
 - **Verify network connectivity**: Ensure containers can communicate on `pgnet-lab`
+- **Check exporter connectivity**: Verify exporters can connect to PostgreSQL instances
 
 ### Connection issues
 
