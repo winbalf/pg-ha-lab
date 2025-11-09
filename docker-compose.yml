@@ -85,9 +85,9 @@ services:
       retries: 5
 
   # PostgreSQL Exporter for Prometheus metrics
-  pg_exporter-lab:
+  pg-exporter-lab:
     image: prometheuscommunity/postgres-exporter:latest
-    container_name: pg_exporter-lab
+    container_name: pg-exporter-lab
     environment:
       - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-secure_password_123}@postgres-primary:5432/${POSTGRES_DB:-testdb}?sslmode=disable
     ports:
@@ -116,6 +116,33 @@ services:
       - EXPORTER_PORT=9188
     ports:
       - "9188:9188"
+    networks:
+      - pgnet-lab
+    depends_on:
+      postgres-primary-lab:
+        condition: service_healthy
+      postgres-standby-lab:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Health Check Server
+  health-check-server-lab:
+    image: alpine:latest
+    container_name: health-check-server-lab
+    command: >
+      sh -c "
+        apk add --no-cache postgresql-client netcat-openbsd bash &&
+        /scripts/health-check-server.sh server
+      "
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_password_123}
+      - POSTGRES_DB=${POSTGRES_DB:-testdb}
+      - HEALTH_CHECK_PORT=8080
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./scripts/health-check-server.sh:/scripts/health-check-server.sh:ro
     networks:
       - pgnet-lab
     depends_on:

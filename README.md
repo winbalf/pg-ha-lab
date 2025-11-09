@@ -10,6 +10,7 @@
 - **Automatic replication setup**: Primary and standby nodes are automatically configured for streaming replication
 - **Monitoring extensions**: Pre-configured with `pg_stat_statements`, `pg_buffercache`, and other useful extensions
 - **Prometheus metrics**: Two exporters included for comprehensive monitoring (standard PostgreSQL metrics and custom replication metrics)
+- **Health check server**: HTTP-based health check server with JSON and Prometheus endpoints for replication monitoring
 - **Test data**: Sample data and test functions included for replication validation
 - **Enhanced logging**: Comprehensive logging configuration for both primary and standby nodes
 - **Health checks**: Built-in health checks ensure nodes are ready before connections
@@ -18,8 +19,9 @@
 
 - **Primary**: `postgres-primary-lab` (port host `35432` → container `5432`)
 - **Standby**: `postgres-standby-lab` (port host `45433` → container `5432`)
-- **PostgreSQL Exporter**: `pg_exporter-lab` (Prometheus metrics on port `9187`)
+- **PostgreSQL Exporter**: `pg-exporter-lab` (Prometheus metrics on port `9187`)
 - **Replication Exporter**: `pg-replication-exporter-lab` (Custom replication metrics on port `9188`)
+- **Health Check Server**: `health-check-server-lab` (HTTP health endpoints on port `8080`)
 - **Network**: `pgnet-lab` (bridge network for inter-container communication)
 - **Volumes**: Separate data directories for primary/standby and a shared logs volume
 
@@ -27,7 +29,7 @@
 
 - Docker and Docker Compose installed
 - ~1 GB free disk space for images and data volumes
-- Ports `35432`, `45433`, `9187`, and `9188` available on your host
+- Ports `35432`, `45433`, `9187`, `9188`, and `8080` available on your host
 
 ## Quick Start
 
@@ -82,6 +84,7 @@ POSTGRES_REPLICATION_PASSWORD=repl_secret
 - **Standby**: `localhost:45433`
 - **PostgreSQL Exporter**: `localhost:9187` (Prometheus metrics endpoint)
 - **Replication Exporter**: `localhost:9188` (Custom replication metrics endpoint)
+- **Health Check Server**: `localhost:8080` (HTTP health check endpoints)
 
 ### Volumes
 
@@ -193,10 +196,13 @@ docker logs postgres-primary-lab
 docker logs postgres-standby-lab
 
 # PostgreSQL Exporter logs
-docker logs pg_exporter-lab
+docker logs pg-exporter-lab
 
 # Replication Exporter logs
 docker logs pg-replication-exporter-lab
+
+# Health Check Server logs
+docker logs health-check-server-lab
 
 # Follow logs in real-time
 docker logs -f postgres-primary-lab
@@ -219,7 +225,7 @@ The logging configuration includes:
 
 The lab includes two Prometheus exporters for comprehensive monitoring:
 
-#### PostgreSQL Exporter (`pg_exporter-lab`)
+#### PostgreSQL Exporter (`pg-exporter-lab`)
 
 Standard PostgreSQL metrics exporter (port `9187`):
 ```bash
@@ -260,11 +266,63 @@ PostgreSQL containers use `pg_isready` health checks:
 
 The replication exporter includes its own health check that verifies the metrics endpoint is responding.
 
+### Health Check Server
+
+The lab includes a dedicated HTTP health check server (`health-check-server-lab`) that provides comprehensive replication health monitoring:
+
+#### Endpoints
+
+- **`GET /health`**: Comprehensive health check with JSON response
+  - Returns health score (0-100), node availability, replication lag, and status
+  - HTTP 200 for healthy/warning, HTTP 503 for critical
+  
+- **`GET /ready`**: Readiness check for orchestration tools
+  - Returns HTTP 200 if both primary and standby are available
+  - Returns HTTP 503 if either node is down
+  
+- **`GET /live`**: Liveness check for orchestration tools
+  - Returns HTTP 200 if primary is available
+  - Returns HTTP 503 if primary is down
+  
+- **`GET /metrics`**: Prometheus-compatible metrics endpoint
+  - Exposes replication lag, node availability, and health score as Prometheus metrics
+
+#### Usage Examples
+
+```bash
+# Comprehensive health check
+curl http://localhost:8080/health
+
+# Readiness check (for Kubernetes/Docker Swarm)
+curl http://localhost:8080/ready
+
+# Liveness check (for Kubernetes/Docker Swarm)
+curl http://localhost:8080/live
+
+# Prometheus metrics
+curl http://localhost:8080/metrics
+```
+
+#### Health Score Calculation
+
+The health check server calculates a health score (0-100) based on:
+- Primary availability (-50 points if down)
+- Standby availability (-30 points if down)
+- Replication lag in bytes (-10 to -30 points based on threshold)
+- Replication lag in seconds (-5 to -20 points based on threshold)
+
+Status levels:
+- **Healthy**: Score ≥ 70 (HTTP 200)
+- **Warning**: Score 50-69 (HTTP 200)
+- **Critical**: Score < 50 (HTTP 503)
+
+For detailed documentation, see `scripts/docs/README-health-check-server.md`.
+
 ## Troubleshooting
 
 ### Containers won't start
 
-- **Check port availability**: Ensure ports `35432`, `45433`, `9187`, and `9188` are not in use
+- **Check port availability**: Ensure ports `35432`, `45433`, `9187`, `9188`, and `8080` are not in use
 - **Check Docker resources**: Ensure Docker has sufficient resources allocated
 - **View logs**: Check container logs for initialization errors
 - **Check exporter builds**: The replication exporter needs to be built - ensure Docker can build images
