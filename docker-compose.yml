@@ -152,11 +152,59 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # pgBadger - PostgreSQL Log Analysis Tool
+  pgbadger-lab:
+    image: dalibo/pgbadger:latest
+    container_name: pgbadger-lab
+    entrypoint: ["/bin/sh", "/scripts/pgbadger-entrypoint.sh"]
+    ports:
+      - "8081:80"
+    volumes:
+      - postgres_lab_logs:/var/log/postgresql
+      - pgbadger_reports_lab:/var/www/html
+      - ./scripts/pgbadger-entrypoint.sh:/scripts/pgbadger-entrypoint.sh:ro
+    networks:
+      - pgnet-lab
+    depends_on:
+      postgres-primary-lab:
+        condition: service_healthy
+      postgres-standby-lab:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # pgTop - Real-time PostgreSQL Monitoring
+  pgtop-lab:
+    image: alpine:latest
+    container_name: pgtop-lab
+    command: >
+      sh -c "
+        apk add --no-cache postgresql-client &&
+        sh /scripts/pgtop.sh
+      "
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_password_123}
+      - POSTGRES_DB=${POSTGRES_DB:-testdb}
+    volumes:
+      - ./scripts/pgtop.sh:/scripts/pgtop.sh:ro
+    networks:
+      - pgnet-lab
+    depends_on:
+      postgres-primary-lab:
+        condition: service_healthy
+      postgres-standby-lab:
+        condition: service_healthy
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+
 networks:
   pgnet-lab:
     driver: bridge
 
 volumes:
   postgres_primary_lab_data:
-  postgres_lab_logs:
   postgres_standby_lab_data:
+  postgres_lab_logs:
+  pgbadger_reports_lab:
